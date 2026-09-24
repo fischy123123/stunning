@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Filament</title>
+<meta name="description" content="A million particles of light flowing through strange attractors. Press, hold, release.">
+<meta name="theme-color" content="#05050b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400&family=Michroma&display=swap">
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<canvas id="stage" aria-label="Particle field. Press and hold to gather light, release to scatter it."></canvas>
+<div id="reticle" aria-hidden="true"><span></span></div>
+
+<header class="brand chrome">
+  <div class="wordmark">Filament</div>
+  <div class="readout"><span id="formName"></span><span id="formParams"></span></div>
+</header>
+
+<div class="count chrome"><span id="count"></span><small>particles</small></div>
+
+<p class="hint chrome" id="hint"><span>press · hold · release</span><small id="hintSub">right-drag to orbit · scroll to zoom</small></p>
+
+<nav class="dock chrome" aria-label="Controls">
+  <div class="group" id="forms" role="radiogroup" aria-label="Form"></div>
+  <div class="group rest">
+    <div class="sep lead"></div>
+    <div class="group" id="palettes" role="radiogroup" aria-label="Color"></div>
+    <div class="sep"></div>
+    <button class="tool" id="btnTrails" type="button"></button>
+    <button class="tool" id="btnSound" type="button" aria-pressed="false"></button>
+    <button class="tool" id="btnFull" type="button" aria-label="Fullscreen"></button>
+  </div>
+</nav>
+
+<div class="tip" id="tip" role="tooltip"></div>
+
+<div class="fallback" id="fallback" hidden>
+  <div class="wordmark">Filament</div>
+  <p>This piece needs WebGL2 with floating-point render targets. A current Chrome, Edge, Firefox or Safari will run it.</p>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

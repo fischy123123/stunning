@@ -1,0 +1,14 @@
+{
+  "name": "filament",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A million particles of light flowing through strange attractors.",
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes http-server -c-1 -p 5173 .",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

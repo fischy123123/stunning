@@ -1,0 +1,424 @@
+:root {
+  color-scheme: dark;
+  --ink: #05050b;
+  --fg: #ece9f6;
+  --fg-2: rgba(236, 233, 246, 0.58);
+  --fg-3: rgba(236, 233, 246, 0.32);
+  --glass: rgba(14, 13, 26, 0.5);
+  --line: rgba(255, 255, 255, 0.085);
+  --accent: #9d8cff;
+  --accent-deep: #0f8f8a;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --display: "Michroma", "Eurostile", "Microgramma", "Arial", sans-serif;
+  --edge: 22px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--ink);
+  color: var(--fg);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font: 300 11px/1.45 var(--mono);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+}
+
+@media (pointer: fine) {
+  #stage { cursor: none; }
+}
+
+/* ---- chrome ------------------------------------------------------------ */
+
+.chrome {
+  transition: opacity 1.2s ease;
+}
+
+body.idle .dock,
+body.idle .hint {
+  opacity: 0;
+}
+
+body.idle .brand,
+body.idle .count {
+  opacity: 0.45;
+}
+
+body.bare .chrome {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.brand {
+  position: fixed;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px));
+  left: calc(var(--edge) + env(safe-area-inset-left, 0px));
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.52em;
+  text-transform: uppercase;
+  color: var(--fg);
+  text-shadow: 0 0 18px var(--accent);
+}
+
+.readout {
+  display: grid;
+  gap: 3px;
+}
+
+#formName {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+#formParams {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+  white-space: pre;
+}
+
+.count {
+  position: fixed;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px));
+  right: calc(var(--edge) + env(safe-area-inset-right, 0px));
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+#count {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--fg-2);
+}
+
+.count small {
+  font-size: 9px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hint span {
+  font-size: 10.5px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+
+.hint small {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+}
+
+.hint.gone,
+body.idle .hint.gone {
+  opacity: 0;
+}
+
+@keyframes breathe {
+  50% { opacity: 0.45; }
+}
+
+/* ---- dock -------------------------------------------------------------- */
+
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 7px;
+  background: var(--line);
+}
+
+.dock button {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, box-shadow 0.3s;
+}
+
+.dock button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+}
+
+.dock button:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.form canvas {
+  width: 26px;
+  height: 26px;
+  opacity: 0.5;
+  transition: opacity 0.25s, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.form:hover canvas {
+  opacity: 0.9;
+}
+
+.form[aria-checked="true"] {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
+    0 0 18px -6px var(--accent);
+}
+
+.form[aria-checked="true"] canvas {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.dock .swatch {
+  width: 30px;
+}
+
+.swatch::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--g);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s;
+}
+
+.swatch:hover::before {
+  transform: scale(1.15);
+}
+
+.swatch[aria-checked="true"]::before {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px var(--accent), 0 0 16px var(--accent);
+}
+
+.tool svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#btnSound[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+/* ---- tooltip + reticle ------------------------------------------------ */
+
+.tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 7px 6px 10px;
+  border-radius: 8px;
+  background: rgba(14, 13, 26, 0.82);
+  border: 1px solid var(--line);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.tip.on {
+  opacity: 1;
+}
+
+.tip kbd {
+  font: inherit;
+  letter-spacing: 0;
+  min-width: 16px;
+  text-align: center;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--fg-2);
+}
+
+#reticle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  --k: 0;
+}
+
+#reticle.on {
+  opacity: 1;
+}
+
+#reticle::before,
+#reticle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+#reticle::before {
+  inset: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transform: scale(calc(1 - var(--k) * 0.5));
+  box-shadow: 0 0 calc(var(--k) * 22px) var(--accent);
+}
+
+#reticle::after {
+  background: conic-gradient(var(--accent) calc(var(--k) * 1turn), transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px));
+  opacity: calc(var(--k) * 4);
+}
+
+#reticle span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: var(--fg);
+}
+
+/* ---- fallback ---------------------------------------------------------- */
+
+.fallback {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  padding-inline: 24px;
+  text-align: center;
+}
+
+.fallback p {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--fg-2);
+  line-height: 1.7;
+}
+
+body.failed .chrome,
+body.failed #stage {
+  display: none;
+}
+
+/* ---- small screens ------------------------------------------------------ */
+
+@media (max-width: 620px) {
+  :root { --edge: 16px; }
+
+  .dock {
+    flex-direction: column;
+    border-radius: 24px;
+    gap: 0;
+  }
+
+  .sep.lead { display: none; }
+
+  .dock button { width: 36px; height: 36px; }
+
+  .hint { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+
+  .wordmark { font-size: 11px; letter-spacing: 0.44em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint span { animation: none; }
+  .chrome, .form canvas, .swatch::before { transition: none; }
+}
