@@ -109,6 +109,8 @@ uniform float uHover;
 uniform float uHold;
 uniform vec4 uBurst;
 uniform float uNova;
+uniform sampler2D uImgTarget;
+uniform float uFormAge;
 
 layout(location = 0) out vec4 oPos;
 layout(location = 1) out vec4 oVel;
@@ -193,7 +195,21 @@ vec3 knotAt(vec2 id, float t) {
   return C + (N * cos(th) + B * sin(th)) * rad;
 }
 
+// Photo: spring to this particle's sample, painted in from the center outward.
+// Far particles ride curl noise, so the picture condenses out of colored smoke.
+vec3 photo(vec3 p, vec2 id, float t) {
+  vec3 target = texelFetch(uImgTarget, ivec2(id), 0).xyz;
+  target.z += sin(target.x * 2.6 + t * .8) * sin(target.y * 2.2 - t * .6) * .035;
+  vec3 d = target - p;
+  float reveal = clamp(uFormAge * .8 - length(target.xy) * .45 - hash12(id * .37) * .35, 0., 1.);
+  vec3 v = d * mix(.2, 3.4, reveal * reveal);
+  // Swirl must stay weaker than the spring once revealed, or regions never settle.
+  v += curl(p * .8 + vec3(0., 0., t * .06)) * min(length(d), .7) * mix(.9, .12, reveal);
+  return v;
+}
+
 vec3 flow(vec3 p, vec2 id, float t) {
+  if (uForm == 6) return photo(p, id, t);
   if (uForm == 0) return aizawa(p);
   if (uForm == 1) return halvorsen(p);
   if (uForm == 2) return lorenz(p);
@@ -295,6 +311,9 @@ uniform vec3 uColorMix;
 uniform vec3 uPal[5];
 uniform int uForm;
 uniform float uTime;
+uniform sampler2D uImgColor;
+uniform float uPhotoMix;
+uniform float uPhotoTrue;
 
 out vec3 vCol;
 out float vSize;
@@ -332,7 +351,7 @@ void main() {
   gl_Position = uProj * vp;
   float z = max(-vp.z, .05);
 
-  float star = step(.9965, seed);
+  float star = step(.9965, seed) * (1. - uPhotoMix);
   float px = uSize * (1. + star * 1.6) * uPointScale / z;
   float coc = abs(z - uFocus) * uAperture * uPointScale / z;
   float size = clamp(sqrt(px * px + coc * coc), 1., 22.);
@@ -345,7 +364,15 @@ void main() {
   float energy = clamp(px * px, .15, 6.) / (size * size);
   float a = uIntensity * energy * (1. + star * 4.);
   a *= mix(1., smoothstep(0., .6, P.w), uRespawn);
-  vCol = palette(t) * a;
+  vec3 col = palette(t);
+  if (uPhotoMix > 0.) {
+    // Photo colors, or the photo's luminance run through the palette.
+    vec3 ic = texelFetch(uImgColor, c, 0).rgb;
+    float l = dot(ic, vec3(.2126, .7152, .0722));
+    vec3 photo = mix(palette(l) * (.1 + .9 * l), pow(ic, vec3(2.2)), uPhotoTrue);
+    col = mix(col, photo * (1. + min(V.w, 3.) * .35), uPhotoMix);
+  }
+  vCol = col * a;
 }`;
 
 export const PARTICLE_FS = HEAD + `

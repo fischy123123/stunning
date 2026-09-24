@@ -4,6 +4,7 @@ import { FORMS } from './forms.js';
 import { PALETTES, LINEAR } from './palettes.js';
 import { perspective, lookAt, normalize, cross, add, scale, dot } from './math.js';
 import { Sound } from './audio.js';
+import { decodeImage, samplePhoto, thumbnail } from './photo.js';
 import { createUI } from './ui.js';
 
 const TRAILS = [
@@ -69,7 +70,7 @@ function boot({ gl, float32 }) {
 
   const state = {
     time: 0,
-    form: clampIndex(prefs.form, FORMS.length, 0),
+    form: FORMS[clampIndex(prefs.form, FORMS.length, 0)].photo ? 0 : clampIndex(prefs.form, FORMS.length, 0),
     palette: clampIndex(prefs.palette, PALETTES.length, 0),
     trails: clampIndex(prefs.trails, TRAILS.length, 1),
     pal: null,
@@ -96,6 +97,11 @@ function boot({ gl, float32 }) {
     flash: 0,
     energy: 0,
     lastInput: 0,
+    formAge: 0,
+    photo: null,
+    photoColors: true,
+    photoMix: 0,
+    photoTrue: 1,
   };
   state.pal = LINEAR[state.palette].map((c) => c.slice());
   state.colorMix = FORMS[state.form].color.slice();
@@ -148,6 +154,7 @@ function boot({ gl, float32 }) {
     if (!bufs) throw new Error('No renderable float format for the simulation');
     sim = { size, n: size * size, bufs, cur: 0 };
     ui.setCount(sim.n);
+    if (state.photo) uploadPhoto();
   }
 
   // ---- screen targets ----------------------------------------------------
@@ -193,8 +200,10 @@ function boot({ gl, float32 }) {
     trails: TRAILS,
     touch,
     handlers: {
-      form: (i) => { setForm(i); input(); },
+      form: (i) => { chooseForm(i); input(); },
       palette: (i) => { setPalette(i); input(); },
+      photoColors: () => { setPhotoColors(true); input(); },
+      photoFile: (file) => { takePhoto(file); input(); },
       trails: () => { cycleTrails(); input(); },
       sound: () => { toggleSound(); input(); },
       fullscreen: () => { toggleFullscreen(); input(); },
@@ -206,13 +215,75 @@ function boot({ gl, float32 }) {
   function setForm(i) {
     if (i === state.form) return;
     state.form = i;
+    state.formAge = 0;
     state.nova = Math.max(state.nova, 0.35);
     ui.setForm(i);
     sound.setForm(FORMS[i]);
     persist();
   }
 
+  // The photo form needs a picture; asking for it again while showing one picks a new one.
+  function chooseForm(i) {
+    if (FORMS[i].photo && (!state.photo || state.form === i)) ui.pickPhoto();
+    else setForm(i);
+  }
+
+  function setPhotoColors(on) {
+    state.photoColors = on;
+    ui.setPhotoColors(on);
+  }
+
+  // ---- photo -----------------------------------------------------------------
+  const photoTex = { target: null, color: null };
+  const dummy = {
+    target: createTexture(gl, 1, 1, { internal: gl.RGBA32F, type: gl.FLOAT, filter: gl.NEAREST, data: new Float32Array(4) }),
+    color: createTexture(gl, 1, 1, { internal: gl.RGBA8, type: gl.UNSIGNED_BYTE, filter: gl.NEAREST, data: new Uint8Array(4) }),
+  };
+  const photoIndex = FORMS.findIndex((f) => f.photo);
+
+  function uploadPhoto() {
+    const sample = samplePhoto(state.photo.source, sim.size);
+    state.photo.sample = sample;
+    if (photoTex.target) {
+      gl.deleteTexture(photoTex.target);
+      gl.deleteTexture(photoTex.color);
+    }
+    photoTex.target = createTexture(gl, sim.size, sim.size, { internal: gl.RGBA32F, type: gl.FLOAT, filter: gl.NEAREST, data: sample.targets });
+    photoTex.color = createTexture(gl, sim.size, sim.size, { internal: gl.RGBA8, type: gl.UNSIGNED_BYTE, filter: gl.NEAREST, data: sample.colors });
+    const fmt = (v) => v.toLocaleString('en-US').replace(/,/g, '\u2009');
+    FORMS[photoIndex].params = `${fmt(sample.cols)} × ${fmt(sample.rows)} points`;
+    ui.setForm(state.form);
+  }
+
+  async function takePhoto(file) {
+    if (file.type && !file.type.startsWith('image/')) {
+      ui.toast('That file isn’t an image. Try a JPG, PNG or WebP.');
+      return;
+    }
+    let source;
+    try {
+      source = await decodeImage(file);
+    } catch {
+      ui.toast('Couldn’t read that image. Try a JPG, PNG or WebP.');
+      return;
+    }
+    state.photo = { source };
+    uploadPhoto();
+    ui.setPhoto(thumbnail(source, 96));
+    setPhotoColors(true);
+    if (state.form === photoIndex) {
+      state.formAge = 0;
+      state.nova = Math.max(state.nova, 0.6);
+      sound.whoosh();
+    } else {
+      setForm(photoIndex);
+    }
+    sound.chime(FORMS[photoIndex]);
+    ui.hintDone();
+  }
+
   function setPalette(i) {
+    if (FORMS[state.form].photo && state.photoColors) setPhotoColors(false);
     if (i === state.palette) return;
     state.palette = i;
     state.palFrom = state.pal.map((c) => c.slice());
@@ -250,13 +321,27 @@ function boot({ gl, float32 }) {
   function updateCamera(dt) {
     const c = state.cam;
     const form = FORMS[state.form];
-    c.yaw += (reduced ? 0 : dt * 0.05) + c.yawVel * dt;
+    if (form.photo) {
+      // Face the picture, sway a little to show its relief, drift back after an orbit.
+      const front = Math.round(c.yaw / (Math.PI * 2)) * Math.PI * 2;
+      const sway = reduced ? 0 : 0.2 * Math.sin(state.formAge * 0.25);
+      c.yaw += (front + sway - c.yaw) * (1 - Math.exp(-dt * 0.8)) + c.yawVel * dt;
+      c.pitchUser *= Math.exp(-dt * 0.8);
+    } else {
+      c.yaw += (reduced ? 0 : dt * 0.05) + c.yawVel * dt;
+    }
     c.pitchUser += c.pitchVel * dt;
     c.yawVel *= Math.exp(-dt * 4);
     c.pitchVel *= Math.exp(-dt * 4);
     c.pitch += (form.pitch - c.pitch) * (1 - Math.exp(-dt * 1.2));
-    const fit = Math.max(1, Math.pow(0.8 / (canvas.width / canvas.height), 0.6));
-    c.dist += (form.dist * c.zoom * fit - c.dist) * (1 - Math.exp(-dt * (state.time < 3 ? 1.1 : 4)));
+    const aspect = canvas.width / canvas.height;
+    let goal = form.dist * c.zoom * Math.max(1, Math.pow(0.8 / aspect, 0.6));
+    if (form.photo && state.photo) {
+      const { W, H } = state.photo.sample;
+      const t = Math.tan(FOV / 2);
+      goal = 1.2 * c.zoom * Math.max(H / 2 / t, W / 2 / (t * aspect));
+    }
+    c.dist += (goal - c.dist) * (1 - Math.exp(-dt * (state.time < 3 ? 1.1 : 4)));
     const hover = state.ptr.mouse && state.ptr.inside && !reduced;
     c.px += ((hover ? state.ptr.ndc[0] * 0.1 : 0) - c.px) * (1 - Math.exp(-dt * 1.8));
     c.py += ((hover ? state.ptr.ndc[1] * 0.07 : 0) - c.py) * (1 - Math.exp(-dt * 1.8));
@@ -424,7 +509,7 @@ function boot({ gl, float32 }) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('button')) return;
     const k = e.key.toLowerCase();
-    if (k >= '1' && k <= String(FORMS.length)) setForm(+k - 1);
+    if (k >= '1' && k <= String(FORMS.length)) chooseForm(+k - 1);
     else if (k === 'c') setPalette((state.palette + (e.shiftKey ? PALETTES.length - 1 : 1)) % PALETTES.length);
     else if (k === 't') cycleTrails();
     else if (k === 'm') toggleSound();
@@ -446,6 +531,42 @@ function boot({ gl, float32 }) {
     state.multitouch = false;
   });
   addEventListener('resize', resize);
+
+  // Photos can arrive by drag and drop or paste, as well as the picker.
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  let dragDepth = 0;
+  addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    if (dragDepth++ === 0) ui.dropZone(true);
+  });
+  addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) ui.dropZone(false);
+  });
+  addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    ui.dropZone(false);
+    const files = [...e.dataTransfer.files];
+    const file = files.find((f) => f.type.startsWith('image/')) || files[0];
+    if (file) { takePhoto(file); input(); }
+  });
+  addEventListener('paste', (e) => {
+    const item = [...(e.clipboardData?.items || [])].find((it) => it.type.startsWith('image/'));
+    const file = item?.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    takePhoto(file);
+    input();
+  });
 
   // ---- adaptive quality ------------------------------------------------------
   const perf = { samples: [], done: !!pinnedSize, steps: 0 };
@@ -477,7 +598,9 @@ function boot({ gl, float32 }) {
     // Wander on our own after a long quiet spell.
     if (state.time - state.lastInput > 50) {
       state.lastInput = state.time - 20;
-      setForm((state.form + 1) % FORMS.length);
+      let next = (state.form + 1) % FORMS.length;
+      if (FORMS[next].photo && !state.photo) next = (next + 1) % FORMS.length;
+      setForm(next);
     }
 
     updateCamera(dt);
@@ -505,6 +628,9 @@ function boot({ gl, float32 }) {
     const lerp = 1 - Math.exp(-dt * 2);
     state.colorMix = state.colorMix.map((v, i) => v + (form.color[i] - v) * lerp);
     state.speedNorm += (form.speedNorm - state.speedNorm) * lerp;
+    state.formAge += dt;
+    state.photoMix += ((form.photo && state.photo ? 1 : 0) - state.photoMix) * (1 - Math.exp(-dt * 1.5));
+    state.photoTrue += ((state.photoColors ? 1 : 0) - state.photoTrue) * (1 - Math.exp(-dt * 3));
 
     const s = state.shock;
     if (s.s > 0) {
@@ -520,6 +646,26 @@ function boot({ gl, float32 }) {
     if (stir) sound.sweep(stir, (p.ndc[0] + 1) / 2, (p.ndc[1] + 1) / 2, state.time);
 
     ui.reticle(p.client[0], p.client[1], p.inside && (p.mouse || state.holding), hold);
+  }
+
+  const PARTICLE_SIZE = 0.0036;
+  const PHOTO_LEVEL = 0.75;
+
+  // Forms use a fixed brightness per particle. A photo is a known grid, so its
+  // brightness is solved so the summed points land at PHOTO_LEVEL for white.
+  function particleIntensity(density, H) {
+    const base = 0.05 * FORMS[state.form].gain * Math.pow(density, 0.75);
+    if (!state.photo || state.photoMix < 0.001) return base;
+    const { W: pw, H: ph, cols, rows } = state.photo.sample;
+    const ps = H / (2 * Math.tan(FOV / 2));
+    const d = camera.dist;
+    const rho = (cols * rows) / ((pw * ps / d) * (ph * ps / d));
+    const px = PARTICLE_SIZE * Math.pow(density, 0.25) * ps / d;
+    const size = Math.max(px, 1);
+    const energy = Math.min(Math.max(px * px, 0.15), 6) / (size * size);
+    const half = (size + 1) / 2;
+    const photo = PHOTO_LEVEL / (energy * rho * 0.77 * half * half);
+    return base + (photo - base) * state.photoMix;
   }
 
   function render(dt) {
@@ -550,6 +696,8 @@ function boot({ gl, float32 }) {
       uHold: hold,
       uBurst: state.burst || [0, 0, 0, 0],
       uNova: state.nova,
+      uImgTarget: photoTex.target || dummy.target,
+      uFormAge: state.formAge,
     });
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     sim.cur = 1 - sim.cur;
@@ -581,16 +729,19 @@ function boot({ gl, float32 }) {
       uView: camera.view,
       uTexW: sim.size,
       uPointScale: H / (2 * Math.tan(FOV / 2)),
-      uSize: 0.0036 * Math.pow(density, 0.25),
+      uSize: PARTICLE_SIZE * Math.pow(density, 0.25),
       uFocus: camera.dist,
       uAperture: 0.0028,
-      uIntensity: 0.05 * form.gain * Math.pow(density, 0.75) * (1 - decay),
+      uIntensity: particleIntensity(density, H) * (1 - decay),
       uRespawn: form.respawn,
       uSpeedNorm: state.speedNorm,
       uColorMix: state.colorMix,
       uPal: state.pal.flat(),
       uForm: state.form,
       uTime: state.time,
+      uImgColor: photoTex.color || dummy.color,
+      uPhotoMix: state.photo ? state.photoMix : 0,
+      uPhotoTrue: state.photoTrue,
     });
     gl.drawArrays(gl.POINTS, 0, sim.n);
 
@@ -658,5 +809,5 @@ function boot({ gl, float32 }) {
   }
   requestAnimationFrame(frame);
 
-  window.__filament = { state, setForm, setPalette, nova };
+  window.__filament = { state, setForm, setPalette, nova, takePhoto };
 }

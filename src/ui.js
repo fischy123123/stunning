@@ -1,4 +1,4 @@
-// Dock, readouts, tooltip, reticle. Everything visual lives in style.css.
+// Dock, readouts, tooltip, reticle, photo intake. Everything visual lives in style.css.
 
 const ICONS = {
   trails: (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${[
@@ -13,6 +13,7 @@ const ICONS = {
 };
 
 const $ = (id) => document.getElementById(id);
+const dprOf = () => Math.min(window.devicePixelRatio || 1, 2);
 
 function project(paths, [yaw, pitch]) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -28,26 +29,60 @@ function project(paths, [yaw, pitch]) {
   return { paths: out, minX, minY, maxX, maxY };
 }
 
-function drawThumb(canvas, proj, color) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const css = canvas.clientWidth || 26;
-  const px = Math.round(css * dpr);
+function prepare(canvas) {
+  const px = Math.round((canvas.clientWidth || 26) * dprOf());
   if (canvas.width !== px) canvas.width = canvas.height = px;
   const g = canvas.getContext('2d');
   g.clearRect(0, 0, px, px);
+  return { g, px };
+}
+
+function drawThumb(canvas, proj, color) {
+  const { g, px } = prepare(canvas);
   const pad = px * 0.08;
   const s = (px - pad * 2) / Math.max(proj.maxX - proj.minX, proj.maxY - proj.minY);
   const ox = px / 2 - ((proj.minX + proj.maxX) / 2) * s;
   const oy = px / 2 + ((proj.minY + proj.maxY) / 2) * s;
   g.globalCompositeOperation = 'lighter';
   g.strokeStyle = color;
-  g.lineWidth = 0.55 * dpr;
+  g.lineWidth = 0.55 * dprOf();
   g.globalAlpha = 0.5;
   for (const pts of proj.paths) {
     g.beginPath();
     pts.forEach(([x, y], i) => (i ? g.lineTo(ox + x * s, oy - y * s) : g.moveTo(ox + x * s, oy - y * s)));
     g.stroke();
   }
+}
+
+// A small framed landscape until a photo arrives, then the photo itself.
+function drawPhotoThumb(canvas, thumb, color) {
+  const { g, px } = prepare(canvas);
+  const u = px / 26;
+  if (thumb) {
+    g.save();
+    g.beginPath();
+    g.arc(px / 2, px / 2, px * 0.44, 0, Math.PI * 2);
+    g.clip();
+    g.drawImage(thumb, 0, 0, px, px);
+    g.restore();
+    return;
+  }
+  g.strokeStyle = color;
+  g.lineWidth = 1.1 * u;
+  g.lineJoin = g.lineCap = 'round';
+  g.globalAlpha = 0.85;
+  g.beginPath();
+  if (g.roundRect) g.roundRect(4 * u, 6 * u, 18 * u, 14 * u, 2.5 * u);
+  else g.rect(4 * u, 6 * u, 18 * u, 14 * u);
+  g.moveTo(5 * u, 18 * u);
+  g.lineTo(10.5 * u, 12.5 * u);
+  g.lineTo(14 * u, 16 * u);
+  g.lineTo(16.5 * u, 13.5 * u);
+  g.lineTo(21 * u, 18 * u);
+  g.stroke();
+  g.beginPath();
+  g.arc(16.5 * u, 10 * u, 1.6 * u, 0, Math.PI * 2);
+  g.stroke();
 }
 
 export function createUI({ forms, palettes, trails, handlers, touch }) {
@@ -59,10 +94,13 @@ export function createUI({ forms, palettes, trails, handlers, touch }) {
   const btnSound = $('btnSound');
   const btnFull = $('btnFull');
   const reticle = $('reticle');
+  const picker = $('photoPick');
+
+  const ui = { form: 0, palette: 0, photo: null, photoColors: true };
 
   function attachTip(el, label, key) {
     const show = () => {
-      tip.innerHTML = `${label()}<kbd>${key}</kbd>`;
+      tip.innerHTML = key ? `${label()}<kbd>${key}</kbd>` : label();
       tip.classList.add('on');
       const r = el.getBoundingClientRect();
       const w = tip.offsetWidth;
@@ -77,22 +115,36 @@ export function createUI({ forms, palettes, trails, handlers, touch }) {
     el.addEventListener('click', () => tip.classList.contains('on') && requestAnimationFrame(show));
   }
 
+  const photoLabel = (i) => (!ui.photo ? 'Add a photo' : ui.form === i ? 'Choose another' : 'Photo');
+
   const thumbs = forms.map((f, i) => {
     const b = document.createElement('button');
     b.className = 'form';
+    b.type = 'button';
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-label', f.name);
     const c = document.createElement('canvas');
     b.appendChild(c);
     b.addEventListener('click', () => handlers.form(i));
-    attachTip(b, () => f.name, i + 1);
+    attachTip(b, () => (f.photo ? photoLabel(i) : f.name), i + 1);
     formWrap.appendChild(b);
-    return { b, c, proj: project(f.thumb(), f.thumbView || [0.6, 0.35]) };
+    return { b, c, f, proj: f.thumb ? project(f.thumb(), f.thumbView || [0.6, 0.35]) : null };
   });
+
+  const photoSwatch = document.createElement('button');
+  photoSwatch.className = 'swatch photo';
+  photoSwatch.type = 'button';
+  photoSwatch.hidden = true;
+  photoSwatch.setAttribute('role', 'radio');
+  photoSwatch.setAttribute('aria-label', 'Photo colors');
+  photoSwatch.addEventListener('click', handlers.photoColors);
+  attachTip(photoSwatch, () => 'Photo colors', '');
+  palWrap.appendChild(photoSwatch);
 
   const swatches = palettes.map((p, i) => {
     const b = document.createElement('button');
     b.className = 'swatch';
+    b.type = 'button';
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-label', p.name);
     b.style.setProperty('--g', `radial-gradient(circle at 34% 30%, ${p.stops[4]} 0%, ${p.stops[3]} 22%, ${p.stops[2]} 48%, ${p.stops[1]} 74%, ${p.stops[0]} 100%)`);
@@ -101,6 +153,19 @@ export function createUI({ forms, palettes, trails, handlers, touch }) {
     palWrap.appendChild(b);
     return b;
   });
+
+  function refreshSwatches() {
+    const photoForm = !!forms[ui.form].photo && !!ui.photo;
+    const photoOn = photoForm && ui.photoColors;
+    photoSwatch.hidden = !photoForm;
+    photoSwatch.setAttribute('aria-checked', String(photoOn));
+    swatches.forEach((b, j) => b.setAttribute('aria-checked', String(!photoOn && ui.palette === j)));
+  }
+
+  function refreshThumbs() {
+    const color = palettes[ui.palette].stops[3];
+    thumbs.forEach(({ c, f, proj }) => (f.photo ? drawPhotoThumb(c, ui.photo, color) : drawThumb(c, proj, color)));
+  }
 
   let trailMode = 0;
   btnTrails.addEventListener('click', handlers.trails);
@@ -114,6 +179,12 @@ export function createUI({ forms, palettes, trails, handlers, touch }) {
   } else {
     btnFull.hidden = true;
   }
+
+  picker.addEventListener('change', () => {
+    const file = picker.files?.[0];
+    picker.value = '';
+    if (file) handlers.photoFile(file);
+  });
 
   if (touch) $('hintSub').textContent = 'two fingers to orbit and zoom';
 
@@ -131,19 +202,46 @@ export function createUI({ forms, palettes, trails, handlers, touch }) {
   wake();
 
   let hintGone = false;
+  let toastTimer = 0;
 
   return {
     setForm(i) {
+      ui.form = i;
       thumbs.forEach(({ b }, j) => b.setAttribute('aria-checked', String(i === j)));
       $('formName').textContent = forms[i].name;
       $('formParams').textContent = forms[i].params;
+      refreshSwatches();
     },
     setPalette(i) {
-      swatches.forEach((b, j) => b.setAttribute('aria-checked', String(i === j)));
+      ui.palette = i;
       const p = palettes[i];
       root.style.setProperty('--accent', p.stops[3]);
       root.style.setProperty('--accent-deep', p.stops[1]);
-      thumbs.forEach(({ c, proj }) => drawThumb(c, proj, p.stops[3]));
+      refreshSwatches();
+      refreshThumbs();
+    },
+    setPhoto(thumb) {
+      ui.photo = thumb;
+      photoSwatch.style.setProperty('--g', `url("${thumb.toDataURL('image/jpeg', 0.85)}") center / cover no-repeat`);
+      refreshSwatches();
+      refreshThumbs();
+    },
+    setPhotoColors(on) {
+      ui.photoColors = on;
+      refreshSwatches();
+    },
+    pickPhoto() {
+      picker.click();
+    },
+    dropZone(on) {
+      $('drop').classList.toggle('on', on);
+    },
+    toast(message) {
+      const el = $('toast');
+      el.textContent = message;
+      el.classList.add('on');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('on'), 3800);
     },
     setTrails(i) {
       trailMode = i;

@@ -142,4 +142,14 @@ export const FORMS = [
     thumb: knotPath,
     thumbView: [0.35, 0.3],
   },
+  {
+    name: 'Photo',
+    photo: true,
+    params: '',
+    respawn: 0, curl: 0, gain: 1, pitch: 0.02, dist: 4.9,
+    color: [0.3, 0.4, 0.3], speedNorm: 1.5,
+    pad: [43, 50, 57, 59, 66],
+    scale: [67, 69, 71, 74, 76, 79, 81, 83, 86, 88],
+    thumb: null,
+  },
 ];

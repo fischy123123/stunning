@@ -373,6 +373,61 @@ body.idle .hint.gone {
   background: var(--fg);
 }
 
+/* ---- photo intake ------------------------------------------------------ */
+
+.swatch.photo::before {
+  width: 16px;
+  height: 16px;
+}
+
+.toast {
+  position: fixed;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px));
+  left: 50%;
+  max-width: calc(100vw - 32px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(14, 13, 26, 0.86);
+  border: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: var(--fg);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.drop {
+  position: fixed;
+  inset: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.drop.on {
+  opacity: 1;
+}
+
+.drop span {
+  font-size: 10.5px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
 /* ---- fallback ---------------------------------------------------------- */
 
 .fallback {

@@ -2,6 +2,7 @@
 
 A million particles of light, simulated on the GPU, flowing through strange attractors and other shapes.
 Press and hold to pull them into a vortex. Let go to scatter them.
+Drop in a photo and the particles rebuild it in its own colors.
 
 ## Run
 
@@ -28,7 +29,8 @@ npm run build      # dist/filament.html
 | Scroll, or pinch | Zoom |
 | Two-finger drag | Orbit (touch) |
 | `1`–`6` | Aizawa, Halvorsen, Lorenz, Nebula, Galaxy, Knot |
-| `C` / `Shift+C` | Next / previous palette |
+| `7`, or drop / paste an image | Photo (press `7` again to pick another) |
+| `C` / `Shift+C` | Next / previous palette (on a photo: recolor it through the palette) |
 | `T` | Trails: dust, mist, silk |
 | `M` | Sound |
 | `Space` | Supernova |
@@ -39,6 +41,8 @@ npm run build      # dist/filament.html
 
 - Particle positions and velocities live in float textures and are updated by a fragment shader (`src/shaders.js`, `SIM_FS`).
   Each form is a flow field: the ODE of an attractor, curl noise, or a spring toward a moving target.
+- A photo is resampled to one point per particle (`src/photo.js`). Each point gets a position on a plane, pushed forward by its brightness, and the pixel's color.
+  The picture paints in from the center; palettes turn it into a gradient map.
 - Particles are drawn as additive points with depth-of-field sizing into a half-float buffer. That buffer fades each frame to leave trails.
 - A downsample/upsample bloom chain, a shockwave refraction ring, chromatic fringe and ACES tone mapping finish the frame.
 - Sound comes from Web Audio (`src/audio.js`): a detuned-saw pad per form, a rising tone while charging, FM bells on release.
